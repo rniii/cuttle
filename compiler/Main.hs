@@ -1,15 +1,16 @@
-{-# LANGUAGE FlexibleContexts #-}
-
 module Main (main) where
 
 import Control.Applicative (Applicative (liftA2), liftA3)
-import Data.Text (Text)
-import qualified Data.Text as T
 import Text.Parsec
 
 main :: IO ()
-main = do
-  print (parseModule "if true { 1 + 2 } else { 3 }")
+main =
+  case parseModule src of
+    Right mod -> print mod
+    Left err -> do
+      print err
+  where
+    src = "{ match foo {}; 2 + 2 }"
 
 parseModule :: String -> Either ParseError Expr
 parseModule = parse mod "unknown.ct"
@@ -18,21 +19,22 @@ parseModule = parse mod "unknown.ct"
 
     expr = binExpr
 
-    binExpr = foldl chainl1 prefixExpr binOps
-    binOps =
-      [ oprs [(BinExpr MulBin, char '*'), (BinExpr DivBin, char '/')]
-      , oprs [(BinExpr AddBin, char '+'), (BinExpr SubBin, char '-')]
-      ]
+    binExpr = foldl chainl1 prefixExpr binOp
+    binOp =
+      fmap BinExpr
+        <$> [ lexeme (identifier `quotedBy` char '`')
+            , choice [punct "*", punct "/"]
+            , choice [punct "+", punct "-"]
+            ]
 
-    prefixExpr = liftA2 PrefixExpr prefixOp primExpr <|> primExpr
-    prefixOp = oprs [(PosPrefix, char '+'), (NegPrefix, char '-')]
-
-    oprs = (<* skip) . choice . map (uncurry (flip (>>) . return))
+    prefixExpr = liftA2 PrefixExpr prefixOp primExpr <|> primExpr <?> "expression"
+    prefixOp = choice [punct "+", punct "-"]
 
     primExpr =
       choice
-        [ caseExpr
-        , ifExpr
+        [ try caseExpr
+        , try ifExpr
+        , BlockExpr <$> block
         , ConstExpr <$> const'
         , VarExpr <$> identifier
         ]
@@ -42,62 +44,46 @@ parseModule = parse mod "unknown.ct"
     caseBlock = braces (caseArm `sepBy` eol)
     guard = if' >> expr
 
-    ifExpr = liftA3 IfExpr (if' >> expr) block (optionMaybe ifElse)
-    ifElse = else' >> block
+    ifExpr = liftA3 IfExpr (if' >> expr) block (optionMaybe elseExpr)
+    elseExpr = else' >> ((: []) <$> ifExpr <|> block)
 
     block = braces (expr `sepBy` eol)
-    braces = between lbrace rbrace
+    braces = between (punct "{") (punct "}")
 
     const' = IntConst <$> intConst
-    intConst = read <$> many1 digit <* skip
+    intConst = lexeme (read <$> many1 digit)
 
-    identifier = Identifier . T.pack <$> liftA2 (:) idStart (many idChar) <* skip <?> "identifier"
-    idStart = letter
-    idChar = alphaNum <|> char '_'
+    identifier = invalidId <|> lexeme (liftA2 (:) idStart (many idChar)) <?> "identifier"
+    idStart = letter :: Parser Char
+    idChar = alphaNum <|> char '_' :: Parser Char
+    invalidId = anyKeyword >> unexpected "keyword"
 
-    lbrace = char '{' >> skip
-    rbrace = char '}' >> skip
-    case' = token "case"
-    if' = token "if"
-    else' = token "else"
-    token t = string t >> eot >> skip
+    case' = keyword "case"
+    if' = keyword "if"
+    else' = keyword "else"
+    anyKeyword = case' <|> if' <|> else'
+    keyword t = string t <* eot <* skip
+    punct t = string t <* skip
+    quotedBy p q = between q q p
 
-    skip = skipMany (char ' ')
     eot = notFollowedBy idChar
-    eol = endOfLine
+    eol = lexeme (endOfLine <|> char ';')
+    lexeme = (<* skip)
+    skip = skipMany (char ' ') <?> ""
+
+type Parser = Parsec String ()
 
 data Expr
   = CaseExpr Expr [(Pattern, Maybe Expr, Expr)]
   | IfExpr Expr [Expr] (Maybe [Expr])
+  | BlockExpr [Expr]
   | VarExpr Identifier
   | ConstExpr Const
-  | BinExpr BinOp Expr Expr
-  | PrefixExpr PrefixOp Expr
-
-instance Show Expr where
-  show (IfExpr e b x) = concat ["(if ", show e, " ", show b, maybe "" (mappend " " . show) x, ")"]
-  show (VarExpr v) = show v
-  show (ConstExpr c) = show c
-  show (BinExpr op a b) = concat ["(", show op, " ", show a, " ", show b, ")"]
-  show (PrefixExpr op a) = concat ["(", show op, " ", show a, ")"]
-  show _ = "?"
-
-data BinOp
-  = AddBin
-  | SubBin
-  | MulBin
-  | DivBin
-
-instance Show BinOp where
-  show AddBin = "+"
-  show SubBin = "-"
-  show MulBin = "*"
-  show DivBin = "/"
-
-data PrefixOp
-  = NegPrefix
-  | PosPrefix
+  | BinExpr Op Expr Expr
+  | PrefixExpr Op Expr
   deriving (Show)
+
+type Op = String
 
 data Pattern
   = VarPat Identifier
@@ -108,12 +94,6 @@ data Pattern
 data Const
   = IntConst Integer
   | CharConst Char
+  deriving (Show)
 
-instance Show Const where
-  show (IntConst c) = show c
-  show (CharConst c) = show c
-
-newtype Identifier = Identifier Text
-
-instance Show Identifier where
-  show (Identifier i) = T.unpack i
+type Identifier = String

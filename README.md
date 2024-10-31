@@ -1,10 +1,8 @@
-# C. rini's Unnamed concurrenTT LanguagE
+# rinilang
 
-This project is an experiment with language design. The language is codenamed Cuttle, but it's name
-upon release will likely be different.
-
-Cuttle is a concurrent, Functional Object-Oriented language. It's designed to be simple, with a easy
-learning curve, while still being powerful enough to build large scalable systems.
+Ri is an experiment on language design. It is a concurrent, functional, OOP-like language. It's
+designed to be simple, with a low learning curve, while still being powerful enough to build large
+and robust scalable systems.
 
 - [Cuttle for rustaceans](#cuttle-for-rustaceans)
 - [Design](#design)
@@ -12,20 +10,22 @@ learning curve, while still being powerful enough to build large scalable system
   - [Zen](#zen)
   - [Roadmap](#roadmap)
 
-## Cuttle for Rustaceans
+## Ri for Rustaceans
 
-Superficially, Cuttle is very similar to Rust. Some syntax has been adapted for readability, and
-also for better familiarity for users of other languages. These are, mainly:
+Superficially, Ri is very similar to Rust. Some syntax has been adapted for readability, and also
+for better familiarity for users of other languages. These are, mainly:
 
 - Semicolons are not necessary. The parser will automatically insert them.
-- Type signatures are not necessary most of the time, but the compiler will suggest you to add them
-for any exported functions and constants. Type inference is global, and it will even infer generics!
-- Functions and types do not need `::`. Instead, `.` is used. This is nicer to read and does not
-have any problems since its easy to deduce at compile time whether something is a type or module.
+- Type inference is global, so function signatures are fully optional, even if you deal with generic
+code. However, exported types which do not have a signature will emit a warning
+- Modules and types do not need `::`. Instead, `.` is used. This is nicer to read and does not have
+any problems since its easy to deduce at compile time whether something is a type or module.
 - `case` is used instead of `match`. This is more familiar to other languages, and doesn't hide the
 fact that it is simply a safer, more powerful `switch`.
 - `type` is used instead of `struct` and `enum`.
 - `#[derive(..)]` is achieved through `type Foo: Eq, Ord`
+- Types can be hinted in any expression: `parse("foo") : T` is preferred over `parse.<T>("foo")` (or
+Rust's turbofish `::<>`)
 
 ### `Option` types are implicit
 
@@ -51,7 +51,7 @@ if let path = os.getenv("FOO") {
 
 ### Operator overloading
 
-Operator overloading in Cuttle is done using type classes. Unlike most languages, `(+)`, `(-)` etc
+Operator overloading in Ri is done using type classes. Unlike most languages, `(+)`, `(-)` etc
 cannot simply be overloaded for *any* type, they must implement *`Number`*. Just like `(==)` is
 expected to compare two values equal, the arithmetic operators are expected to do arithmetic.
 
@@ -161,7 +161,8 @@ connection between them and Haskell's type system.
   - [ ] x86-64 compiler, dynamic and static linking
   - [ ] Stable, future-compatible spec
 
-(please ignore the section below its where I pretend the language already exists)
+(please ignore the section below its where I pretend the language already exists and write things in
+it)
 
 ```
 trait Sequence {

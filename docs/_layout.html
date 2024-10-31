@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>$title$</title>
+  <style>
+  body {
+    background: #261f2d;
+    color: #d8d0d5;
+    display: flex;
+    margin: 0;
+  }
+  main {
+    max-width: 80ch;
+    margin: 0 auto;
+    padding: 1em;
+  }
+  header {
+    text-align: center;
+    padding: 2ch 0;
+  }
+  code { color: #97d0e8 }
+  a, a * { color: #d895ee }
+  pre {
+    white-space: pre-wrap;
+    background: #1d1922;
+    padding: 8px;
+    border-radius: 4px;
+  }
+  hr {
+    color: #453658;
+  }
+
+  nav {
+    background: #30263a;
+    width: 30ch;
+  }
+  nav ul {
+    margin: 0;
+    position: sticky;
+    top: 0;
+    list-style: none;
+    line-height: 2;
+    padding: 0 2ch;
+    a, a * {
+      color: #d8d0d5;
+      text-decoration: none;
+    }
+    .toc-section-number {
+      font-weight: bold;
+    }
+  }
+
+  .header-section-number {
+    color: #a590c0;
+  }
+
+  .todo p {
+    border-left: #9be099 4px solid;
+    background: #2b3c2a;
+    padding: 8px 1ch;
+  }
+  .todo p::before {
+    content: "TODO: ";
+    color: #9be099;
+    font-weight: bold;
+  }
+
+  code.sourceCode { color: #d8d0d5 }
+  .kw { color: #ca97e8 }
+  .ch { color: #97d0e8 }
+  .dv, .pp { color: #ee95d2 }
+  .dt, .bu { color: #e8d097 }
+  .st { color: #9be099 }
+  .co { color: #909090 }
+  .ot, .op { color: #979ae8 }
+  </style>
+
+  <body>
+    <nav>$table-of-contents$</nav>
+
+    <main>
+      <header>
+        <h1>$title$</h1>
+        <p>$subtitle$</p>
+      </header>
+      $body$
+    </main>
+  </body>
+</html>
