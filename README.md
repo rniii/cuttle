@@ -47,6 +47,30 @@ if let path = os.getenv("FOO") {
 }
 ```
 
+### Statements can't be expressions
+
+In Rust, the `match`, `loop`, `while`, `for`, and `if` constructs are expressions, which leadings to
+some quite ugly terse statements. In Ri, `if` expressions have a different, more readable syntax:
+
+```rs
+let foo = if cond() then a else b
+```
+
+Unlike `if` statements, you cannot omit the `else` clause, so nesting is not ambiguous. It is
+analogous to the ternary operator found in many languages (`x ? a : b`), but is more readable with
+nested conditions.
+
+`case` is still like Rust's `match`, allowing you to use implicit returns more nicely:
+
+```rs
+fn hello(name) {
+  case name {
+    "rini" -> "Oh, hey me"
+    _ -> "Hi there, " ++ name ++ "!"
+  }
+}
+```
+
 ## Design
 
 ### Operator overloading
@@ -165,45 +189,38 @@ connection between them and Haskell's type system.
 it)
 
 ```
-trait Sequence {
-  const empty: Self
-  fn append(Self, Self) -> Self
+interface Eq {
+  fn (==)(x: Self, x: Self) { !(x != y) }
+  fn (!=)(x: Self, y: Self) { !(x == y) }
 }
 
-operator (++) Sequence.append
+type Int: Eq
 
-trait Eq {
-  fn eq(x: Self, x: Self) { !(x != y) }
-  fn ne(x: Self, y: Self) { !(x == y) }
+fn Int.(==)(x, y) { @intEq(x, y) }
+
+type Ordering {
+  less    = -1
+  equal   = 0
+  greater = +1
 }
 
-operator (==) Eq.eq
-operator (!=) Eq.ne
-
-type Ordering { Less, Equal, Greater }
-
-trait Ord: Eq {
-  fn cmp(Self, Self) -> Ordering {
+class Ord: Eq {
+  fn compare(x: Self, y: Self) -> Ordering {
     case {
-      if x == y -> Equal
-      if x <= y -> Less
+      x == y -> Equal
+      x <= y -> Less
       _ -> Greater
     }
   }
 
-  fn le(x, y) { let Less | Equal = compare(x, y) }
-  fn ge(x, y) { y <= x }
-  fn lt(x, y) { !(x >= y) }
-  fn gt(x, y) { !(y >= x) }
+  fn (<=)(x, y) { let Less | Equal = compare(x, y) }
+  fn (>=)(x, y) { y <= x }
+  fn (<)(x, y) { !(x >= y) }
+  fn (>)(x, y) { !(y >= x) }
 
   fn max(x, y) { if x <= y then x else y }
   fn min(x, y) { if x <= y then y else x }
 }
-
-operator (<=) Ord.le
-operator (>=) Org.ge
-operator (<) Ord.lt
-operator (>) Ord.gt
 
 trait Number {
   const minBound: Self
@@ -211,62 +228,140 @@ trait Number {
 }
 ```
 
-```abnf
-Block = "{" *( Stmt eol ) "}"
-
-CaseExpr = "case" Expr "{" *( CaseArm eol ) "}"
-
-CaseArm = Pattern [ "if" Expr ] "->" Expr
-
-Const = Integer / Float
-
-Integer =  [ sign ] 1*digit 1*( *"_" *digit )
-Integer =/ [ sign ] "0o" 1*( *"_" *octDigit )
-Integer =/ [ sign ] "0x" 1*( *"_" *hexDigit )
-Float   =  [ sign ] 1*digit "." 1*digit [ ( "e" / "E" ) 1*digit ]
-
-sign      = "+" / "-"
-digit     = %x30-39 ; 0-9
-octDigit = %x30-36 ; 0-6
-hexDigit = digit / %x41-46 / %61-%66 ; 0-9, a-f, A-F
-
-skip = " " / comment
-comment = "//" *(!eol .)
-comment =/ "/*" *(!"*/" .) "*/"
-eol = "\n" / "\r\n"
 ```
+// Instead of impl Default for ... {} you can provide the methods here
+type Taskfile: Default {
+  path    String
+  tasks   Task[]
+}
 
-```
-fn runTask(name: String) -> Maid<()> {
-  let tasks <- asks(.taskfile)
-  let task = tasks.find(|x| x.name == name) ?? throw UnknownTask(name)
+fn Taskfile.default() {
+  var path = os.cwd()
 
-  if let true <- asks(.dryRun) { return }
+  until path.isRoot() {
+    for name of ["README.md", "CONTRIBUTING.md"] {
+      let path = path ++ name
 
-  case task.lang {
-    "bash" | "sh" -> {
-      let quiet <- asks(.quiet)
-      runProc("sh", "maidtask.sh", [if quiet then "-euv" else "-eu"], input)
+      if let src = os.read(path), tasks = parseTasks(src) {
+        return Taskfile(path, tasks)
+      }
     }
-    "haskell" | "hs" -> runProc("runhaskell", "MaidTask.hs", ["-W"], input)
-    "javascript" | "js" -> runProc("node", "maidtask.js", [], input)
-    _ -> throw UnknownLanguage(lang)
+
+    path = path.parent()
   }
 }
 
-fn runProc(cmd, file, args, input) {
-  guard let false <- asks(.dryRun)
+type Color: Show {
+  String?
+}
 
-  let name, tmp = os.mktemp(file) // -> String, File
-  tmp.write(input) // &File, r -> ()
-  tmp.close() // File -> (), drop
-  case os.process(cmd, args ++ [name]).wait() {
-    ExitFailure(i) -> exit(i)
-    _ -> {}
+fn Color.show(self) {
+  case self {
+    Color(sgr) -> "\ESC[" ++ sgr ++ "]"
+    _ -> ""
   }
 }
 
-fn findTasks(blocks: [Block]) -> [Task] {
+type Style: Default {
+  primary, secondary, tertiary, error Color
+}
+
+fn Style.default() {
+  if tty.supportsAnsi() && os.getenv("NO_COLOR").none() {
+    Style("95;1", "0;1", "", "31;1")
+  } else {
+    Style(nil, nil, nil, nil)
+  }
+}
+
+// Or, if you don't, types like `Default` will simply be automatically derived
+// `Lazy T` is basically a `() -> T` function
+type Context: Default {
+  dryRun, quiet Bool
+  taskfile      Lazy Taskfile
+  style         Style
+}
+
+// Tags being used for this looks really nice
+// Docstrings should be added to the reflection API so this is possible
+type Cli: Parser {
+  list      Bool    "-l"        /// List tasks concisely
+  dryRun    Bool    "-n"        /// Don't run anything, only display commands
+  quiet     Bool    "-q"        /// Don't display anything
+  taskfile  String? "-f FILE"   /// Use tasks in FILE
+}
+
+// +Error is extending the builtin Error type
+// I guess it could automatically format itself via the tags?
+type +Error {
+  NoTaskfile          "No taskfile"
+  NoTasks(Path)       "No tasks in {}"
+  UnknownTask(String) "No such task: {}"
+  UnknownLang(String) "No such language: {}"
+}
+
+fn main() {
+  // A let without an assignment will use `Default`
+  var ctx Context
+  let opts, args = cmd.parse()
+
+  if let path = opts.taskfile {
+    maid.taskfile = Lazy { parseTasks(fs.read(path)) }
+  }
+
+  if opts.list {
+    for task of maid.taskfile {
+      println(task.name, task.desc)
+    }
+    return
+  }
+
+  if let name = args.first() {
+    runTask(ctx, name)
+  } else {
+    listTasks(ctx)
+  }
+}
+
+fn runTask(ctx Context, name String) ! {
+  let tasks = ctx.taskfile
+  let task = tasks.find(|x| x.name == name) ?? throw UnkownTask(name)
+  let code = task.code
+
+  let cmd, file, args = case task.lang {
+    "bash" | "sh" => ("sh", "maidtask.sh", [if quiet then "-eu" else "-euv"])
+    "haskell" | "hs" => ("runhaskell", "MaidTask.hs", ["-W"])
+    "javascript" | "js" => ("node", "maidtask.js", [])
+    lang => throw UnknownLang(lang)
+  }
+
+  if ctx.dryRun then return
+
+  let path, tmp = os.mktemp(file)
+  tmp.write(code)
+  tmp.drop()
+
+  if os.exec(cmd, args).error() {
+    os.exit(code)
+  }
+}
+
+fn listTasks(ctx Context) {
+  let file, tasks = ctx.taskfile
+  let styl = ctx.style
+
+  // no i dont know how both would work at the same time
+  print(styl.primary)
+  println("Tasks in {file}")
+  for task of tasks {
+    print(styl.secondary)
+    println("  {}", task.name)
+    print(styl.tertiary)
+    println(task.desc.indent("    "))
+  }
+}
+
+fn findTasks(blocks: [Block]) [Task] {
   case blocks {
     [Heading(h, _), Paragraph(p), ..blocks] if p.words() == magic ->
       findTasks(blocks.takeUntil(match Heading(h2, _) if h2 <= h))
@@ -298,56 +393,41 @@ where
   }
 }
 
-fn listTasks() {
-  let file, tasks <- asks(.taskfile)
-  let style <- asks(.style)
-
-  print(style.primary)
-  println("Tasks in {}" % file.filename())
-  println()
-  for task of tasks {
-    print(style.secondary)
-    println("  {}" % task.name)
-    print(style.tertiary)
-    println(task.desc.lines().map("    " ++).unlines())
-  }
-}
-
-fn parseMarkdown(src: String) -> [Block] {
+fn parseMarkdown(src String) [Block] {
   let lines = src.lines()
+  let body = []
 
   for line of lines {
-    case {
-      if isBlank(line) -> nil
-      if isHeading(line) -> {
+      if isBlank(line) {
+        continue
+      } else if isHeading(line) {
         let hashes, line = line.breakOnce(!= '#')
-        Heading(hashes.len(), line.strip())
-      }
-      if isFenced(line) -> {
+        body.push(Heading(hashes.len(), line.strip()))
+      } else if isFenced(line) {
         let end, lang = line.breakOnce(!= line[0])
-        let src = lines.takeUntil(|x| x.startsWith(end))
-        Code(lang, src.unlines())
-      }
-      if isIndented(line) -> {
-        let src = lines.takeWhile(|x| isIndented(x) || isBlank(x))
-        Code("", src.map(|x| x[4..]).unlines())
-      }
-      _ -> {
-        let src = lines.takeUntil(|x| isHeading(x) || isFenced(x) || isBlank(x))
-        Paragraph(src.unlines())
+        let src = lines.takeUntil(\x => x.startsWith(end))
+        body.push(Code(lang, src.unlines()))
+      } else if isIndented(line) {
+        let src = lines.takeWhile(\x => isIndented(x) || isBlank(x))
+        body.push(Code("", src.map(|x| x[4:]).unlines()))
+      } else {
+        let src = lines.takeUntil(\x => isHeading(x) || isFenced(x) || isBlank(x))
+        body.push(Paragraph(src.unlines()))
       }
     }
   }
-where
-  fn isBlank(x) { x.all(isSpace) }
-  fn isHeading(x) { x.startsWith("#") }
-  fn isIndented(x) { x.startsWith("    ") }
-  fn isFenced(x) { x.startsWith("```") || x.startsWith("~~~") }
+
+  body
 }
 
+fn isBlank(x) { x.all(isSpace) }
+fn isHeading(x) { x.startsWith("#") }
+fn isIndented(x) { x.startsWith("    ") }
+fn isFenced(x) { x.startsWith("```") || x.startsWith("~~~") }
+
 type Block {
-  Heading { depth: Int, text: String }
-  Code { lang: String, text: String }
-  Paragraph { text: String }
+  Heading(depth Int, text String)
+  Code(lang, text String)
+  Paragraph(text String)
 }
 ```
