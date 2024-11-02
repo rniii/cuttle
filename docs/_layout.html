@@ -20,7 +20,7 @@
     padding: 2ch 0;
   }
   a { color: #d895ee }
-  p code, dl code, table code { 
+  code:not(.sourceCode) { 
     color: #97d0e8;
     background: #1d1922;
     padding: 2px 4px;
@@ -37,10 +37,12 @@
   }
   table {
     margin: 1em 0;
-    padding: 0 8px;
-    background: #2f354e;
+    padding: 0 1em;
+    background: #6469832e;
     width: 100%;
   }
+  dt { font-weight: bold }
+  sup, sub {font-size: 0.7em;}
 
   nav {
     background: #30263a;
@@ -104,6 +106,7 @@
       <header>
         <h1>$title$</h1>
         <p>$subtitle$</p>
+        <p class="author">$author$</p>
       </header>
       $body$
     </main>
