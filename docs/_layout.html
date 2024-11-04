@@ -20,9 +20,10 @@
     padding: 2ch 0;
   }
   a { color: #d895ee }
-  code:not(.sourceCode) { 
+  :not(pre) > code { 
     color: #97d0e8;
     background: #1d1922;
+    border: 1px #30484a50 solid;
     padding: 2px 4px;
     border-radius: 4px;
   }
@@ -37,9 +38,22 @@
   }
   table {
     margin: 1em 0;
-    padding: 0 1em;
     background: #6469832e;
     width: 100%;
+  }
+  thead + tbody .odd {
+    background: #1d1922;
+  }
+  thead + tbody .even {
+    background: #261f2d;
+  }
+  thead + tbody td {
+    padding: 4px 1em;
+  }
+  th {
+    padding: 4px 1em;
+    text-align: left;
+    background: #58456a;
   }
   dt { font-weight: bold }
   sup, sub {font-size: 0.7em;}
@@ -68,11 +82,19 @@
     color: #a590c0;
   }
 
-  .todo p {
-    border-left: #9be099 4px solid;
+  .todo, .topic {
+    padding: 1px 1ch;
+    border-radius: 4px;
+    margin: 1em 0;
+  }
+  .todo {
+    border: 2px #304b2f solid;
+    border-left: 4px #9be099 solid;
     background: #2b3c2a;
-    padding: 8px 1ch;
-    &::before {
+    p {
+      margin: 8px 0;
+    }
+    p:first-child::before {
       content: "TODO: ";
       color: #9be099;
       font-weight: bold;
@@ -82,8 +104,6 @@
     border: 2px #2f354e solid;
     border-left: 4px #8f9fdc solid;
     background: #232635;
-    padding: 0 1ch;
-    border-radius: 4px;
     strong {
       margin: 1rem 0;
       color: #8f9fdc;

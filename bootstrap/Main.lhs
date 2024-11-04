@@ -118,12 +118,10 @@ Linear whitespace
   Any amount of regular whitespace, newlines, and line comments ``-- …``
 
 Newline
-  ASCII LF ``'\n'``, CRLF ``"\r\n"``, or CR ``'\r'`` (discouraged)
+  ASCII LF ``'\n'``, CRLF ``"\r\n"``, or CR ``'\r'``
 
 Statement terminator
   Either a newline, or a semicolon ``;``
-
-Comments can be nested. ``/* /* … */ */`` is a single comment.
 
 > ws  = skipMany $ void spc
 > lws = skipMany $ void spc <|> void eol <|> comment
@@ -140,6 +138,13 @@ Comments can be nested. ``/* /* … */ */`` is a single comment.
 
 Keywords and Operators
 ----------------------
+
+.. TODO::
+    Reserved keywords should be relaxed once the language specification is more concrete
+
+    In particular, only two cases of keywords are important: ambiguous syntax (e.g. ``break``,
+    ``return``, ``throw``), and confusing repeated keywords (e.g. ``if if {}``, ``let let =``),
+    which may parse correctly but are hard to read
 
 The following keywords are reserved and shall not be used as identifiers:
 
@@ -159,11 +164,9 @@ Not all exist in the current version, but may be used in future versions of the 
 > kwNil     = kw "nil"
 > kwThen    = kw "then"
 > kwTrue    = kw "true"
->
+
 > kw :: String -> Parser ()
 > kw p = lexeme $ do string p; notFollowedBy idChar
-
-Operator precedence is defined in `Section 3 <#expressions>`__
 
 > plus    = op "+"
 > minus   = op "-"
@@ -175,7 +178,7 @@ Operator precedence is defined in `Section 3 <#expressions>`__
 > op :: String -> Parser String
 > op p = lexeme $ string p
 
-Any 2-adic function may be used infix like an operator, by surrounding it in backticks (`` ` ``):
+Any 2-adic function may be used infix like an operator, by surrounding it in backticks (``'`'``):
 
 > quotedOp = lexeme $ do
 >   quote; i <- identifier; quote
@@ -239,27 +242,105 @@ Expressions
 
 .. topic:: Grammar
 
-    =================== ===== ========================= ===
-    *expression*        `=`   *aexp* ``:`` *type*       (type annotation)
-    ..                  `|`   *aexp*                    ..
-    ..                  ..    ..                        ..
-    *aexp*              `=`   *aexp* ``+`` *mexp*       ..
-    ..                  `|`   *aexp* ``-`` *mexp*       ..
-    ..                  `|`   *mexp*                    ..
-    ..                  ..    ..                        ..
-    *mexp*              `=`   *mexp* ``*`` *qexp*       ..
-    ..                  `|`   *mexp* ``/`` *qexp*       ..
-    ..                  `|`   *mexp* ``//``             ..
-    ..                  `|`   *qexp*                    ..
-    ..                  ..    ..                        ..
-    *qexp*              `=`   *primexp* *qop* *quotexp* (quoted function call)
-    ..                  `|`   *primexp*                 ..
-    ..                  ..    ..                        ..
-    *qop*               `=`   `` ` `` *id* `` ` ``      ..
-    =================== ===== ========================= ===
+    =================== === ===
+    *expression*        `=` *orexp* ``:`` *type*
+    ..                  `|` *orexp*
+    ..                  ..  ..
+    *orexp*             `=` *orexp* ``or`` *andexp*
+    ..                  `|` *andexp*
+    ..                  ..  ..
+    *andexp*            `=` *andexp* ``and`` *notexp*
+    ..                  `|` *notexp*
+    ..                  ..  ..
+    *notexp*            `=` ``not`` *notexp*
+    ..                  `|` *cmpexp*
+    ..                  ..  ..
+    *cmpexp*            `=` *cmpexp* *cmp* *infexp*
+    ..                  `|` *infexp*
+    ..                  ..  ..
+    *cmp*               `=` ``<`` | ``>`` | ``>=`` | ``<=`` | ``==`` | ``!=`` | ``is`` | ``is not``
+    ..                  ..  ..
+    *infexp*            `=` *infexp* *qop* *addexp*
+    ..                  `|` *addexp*
+    ..                  ..  ..
+    *inf*               `=` `` ` `` *identifier* `` ` ``
+    ..                  ..  ..
+    *addexp*            `=` *addexp* ``+`` *mulexp*
+    ..                  `|` *addexp* ``-`` *mulexp*
+    ..                  `|` *mulexp*
+    ..                  ..  ..
+    *mulexp*            `=` *mulexp* ``*`` *negexp*
+    ..                  `|` *mulexp* ``/`` *negexp*
+    ..                  `|` *mulexp* ``%`` *negexp*
+    ..                  `|` *mulexp* ``//`` *negexp*
+    ..                  `|` *negexp*
+    ..                  ..  ..
+    *negexp*            `=` ``-`` *negexp*
+    ..                  `|` ``+`` *negexp*
+    ..                  `|` *powexp*
+    ..                  ..  ..
+    *powexp*            `=` *primexp* ``**`` *powexp*
+    ..                  `|` *primexp*
+    ..                  ..  ..
+    *primexp*           `=` *primexp* ``.`` *identifier*
+    ..                  `|` *primexp* ``[`` … ``]``
+    ..                  `|` *primexp* ``(`` … ``)``
+    =================== === ===
 
 Operator expressions
-~~~~~~~~~~~~~~~~~~~~
+--------------------
+
++---------------+---------------------------+---------------------------+
+| Associativity | Operator                  | Description               |
++===============+===========================+===========================+
+| …             | ``(expr)``                | Grouped expression        |
++---------------+---------------------------+---------------------------+
+| Left to right | ``x[…]`` ``x.attr``       | Indexing, attribute       |
+|               |                           +---------------------------+
+|               | ``f(args…)``              | Function call             |
++---------------+---------------------------+---------------------------+
+| Right to left | ``**``                    | Exponentiation[#exp]_     |
++---------------+---------------------------+---------------------------+
+| Prefix        | ``+x`` ``-x``             | Positive, negative        |
++---------------+---------------------------+---------------------------+
+| Left to right | ``*`` ``/``               | Multiplication, division  |
+|               |                           +---------------------------+
+|               | ``%``                     | Modulo                    |
+|               |                           +---------------------------+
+|               | ``//``                    | Integer division          |
++---------------+---------------------------+---------------------------+
+| Left to right | ``+`` ``-``               | Addition, subtraction     |
++---------------+---------------------------+---------------------------+
+| Invalid       | ``x `op` y``              | Infix function call       |
++---------------+---------------------------+---------------------------+
+| Non           | ``==`` ``!=``             | Equality                  |
+|               |                           +---------------------------+
+|               | ``<`` ``<=`` ``>`` ``>=`` | Comparison                |
+|               |                           +---------------------------+
+|               | ``is`` ``is not``         | Structural equality       |
++---------------+---------------------------+---------------------------+
+| Prefix        | ``not x``                 | Boolean NOT               |
++---------------+---------------------------+---------------------------+
+| Left[#and]_   | ``and``                   | Boolean AND               |
++---------------+---------------------------+---------------------------+
+| Left          | ``or``                    | Boolean OR                |
++---------------+---------------------------+---------------------------+
+| Invalid       | ``:``                     | Type annotation           |
++---------------+---------------------------+---------------------------+
+| …             | ``if … then … else …``    | Conditional               |
++---------------+---------------------------+---------------------------+
+| …             | ``\args -> expr``         | Lambda expression         |
++---------------+---------------------------+---------------------------+
+
+.. [#exp]
+
+    Note that the power operator has higher precedence over prefix operators: ``-1 ** 2`` thus
+    parses as ``-(1 ** 2)`` instead of ``(-1) ** 2``, as is conventional in mathematics.
+
+.. [#and]
+
+    ``(a and b) and c`` evaluates exactly the same way as ``a and (b and c)`` due to
+    short-circuiting, so it does not particularly matter.
 
 > expression :: Parser Expr
 > expression = 
@@ -330,6 +411,16 @@ Declarations
 
 > data Decl
 
+The ``builtin`` module
+======================
+
+  using (
+    char  (chr, ord)
+    io    (input, print)
+    iter  (all, any, enumerate, filter, len, map, reversed, sorted, zip)
+    math  (divmod, max, min, pow, sum, round)
+  )
+
 Standard types
 ==============
 
@@ -375,7 +466,7 @@ The optional type: ``T?``
     }
 
     func (<=)(a, b) {
-      compare(a, b) is not .greater
+      compare(a, b) is not Greater
     }
 
     func (>=)(a, b) {
@@ -392,3 +483,5 @@ The optional type: ``T?``
   }
 
   default instance for Equatable { @builtin() } // derived by compiler
+
+.. vim: set syntax=rst:
